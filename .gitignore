@@ -1,0 +1,17 @@
+# Archivos compilados
+*.o
+*.out
+
+# Logs
+*.log
+
+# Builds
+/build/
+/dist/
+/target/
+
+# Editores
+.vscode/
+.idea/
+*.swp
+
