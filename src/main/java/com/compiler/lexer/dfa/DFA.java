@@ -18,8 +18,6 @@ public class DFA {
      * A list of all states in the DFA.
      */
     public final List<DfaState> allStates;
-    // Optionally, a Set<Character> for the alphabet could be added.
-
     /**
      * Constructs a new DFA.
      * @param startState The starting state of the DFA.
