@@ -16,8 +16,13 @@
  */
 package com.compiler.lexer;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import com.compiler.lexer.dfa.DFA;
@@ -35,7 +40,6 @@ public class DfaMinimizer {
      * Default constructor for DfaMinimizer.
      */
         public DfaMinimizer() {
-            // TODO: Implement constructor if needed
         }
 
     /**
@@ -46,7 +50,6 @@ public class DfaMinimizer {
      * @return A minimized DFA equivalent to the original.
      */
     public static DFA minimizeDfa(DFA originalDfa, Set<Character> alphabet) {
-    // TODO: Implement minimizeDfa
     /*
      Pseudocode:
      1. Collect and sort all DFA states
@@ -57,7 +60,97 @@ public class DfaMinimizer {
      6. Reconstruct transitions for minimized states
      7. Set start state and return minimized DFA
     */
-    throw new UnsupportedOperationException("Not implemented");
+        // 1. Get and sort all states by id to ensure consistency
+        List<DfaState> allStates = new ArrayList<>(originalDfa.allStates);
+        allStates.sort(Comparator.comparingInt(s -> s.id));
+
+        // 2. Initialize the pair table using auxiliar function
+        Map<Pair, Boolean> table = initializeTable(allStates);
+
+        // 3. Iteratively mark pairs as distinguishable until no changes occur
+        boolean changed = true;
+        while (changed) {
+            changed = false;
+            for (int i = 0; i < allStates.size(); i++) {
+                for (int j = i + 1; j < allStates.size(); j++) {
+                    Pair p = new Pair(allStates.get(i), allStates.get(j));
+
+                    // Only check unmarked pairs 
+                    if (!table.get(p)) {
+                        for (char symbol : alphabet) {
+                            DfaState t1 = allStates.get(i).getTransition(symbol);
+                            DfaState t2 = allStates.get(j).getTransition(symbol);
+
+                            if (t1 != null && t2 != null) {
+                                // If their transitions lead to distinguishable states, mark as distinguishable
+                                Pair tp = new Pair(t1, t2);
+                                if (table.getOrDefault(tp, false)) {
+                                    table.put(p, true);
+                                    changed = true;
+                                    break; 
+                                }
+                            } else if (t1 != null || t2 != null) {
+                                // One state has a transition and the other does not -> distinguishable
+                                table.put(p, true);
+                                changed = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4. Create partitions of equivalent states (using Union-Find)
+        List<Set<DfaState>> partitions = createPartitions(allStates, table);
+
+        // 5. Create new states for each partition
+        Map<DfaState, DfaState> stateMap = new HashMap<>();
+        List<DfaState> newStates = new ArrayList<>();
+        for (Set<DfaState> part : partitions) {
+            // The first state in the partition is chosen as representative
+            DfaState rep = part.iterator().next();
+            DfaState newState = new DfaState(rep.nfaStates);
+            newState.setFinal(rep.isFinal());
+            newStates.add(newState);
+
+            // Map every old state in the partition to the new representative state
+            for (DfaState old : part) {
+                stateMap.put(old, newState);
+            }
+        }
+
+        // 6. Reconstruct transitions for the minimized states
+        for (DfaState old : allStates) {
+            DfaState mapped = stateMap.get(old);
+            for (Map.Entry<Character, DfaState> entry : old.getTransitions().entrySet()) {
+                Character symbol = entry.getKey();
+                DfaState target = entry.getValue();
+                mapped.addTransition(symbol, stateMap.get(target));
+            }
+        }
+
+        // 7. The new start state is the representative of the original start state
+        DfaState newStart = stateMap.get(originalDfa.startState);
+        return new DFA(newStart, newStates);
+    }
+
+    /**
+     * Auxiliar function: initializes the pair table by marking as distinguishable
+     * those pairs where one state is final and the other is not.
+     */
+    private static Map<Pair, Boolean> initializeTable(List<DfaState> allStates) {
+        Map<Pair, Boolean> table = new HashMap<>();
+        for (int i = 0; i < allStates.size(); i++) {
+            for (int j = i + 1; j < allStates.size(); j++) {
+                DfaState s1 = allStates.get(i);
+                DfaState s2 = allStates.get(j);
+                Pair p = new Pair(s1, s2);
+                // Mark distinguishable if one is final and the other is not
+                table.put(p, s1.isFinal() != s2.isFinal());
+            }
+        }
+        return table;
     }
 
     /**
@@ -68,7 +161,6 @@ public class DfaMinimizer {
      * @return List of partitions, each containing equivalent states.
      */
     private static List<Set<DfaState>> createPartitions(List<DfaState> allStates, Map<Pair, Boolean> table) {
-    // TODO: Implement createPartitions
     /*
      Pseudocode:
      1. Initialize each state as its own parent
@@ -76,7 +168,27 @@ public class DfaMinimizer {
      3. Group states by their root parent
      4. Return list of partitions
     */
-    throw new UnsupportedOperationException("Not implemented");
+        Map<DfaState, DfaState> parent = new HashMap<>();
+        for (DfaState s : allStates) {
+            parent.put(s, s);
+        }
+
+        for (int i = 0; i < allStates.size(); i++) {
+            for (int j = i + 1; j < allStates.size(); j++) {
+                Pair p = new Pair(allStates.get(i), allStates.get(j));
+                if (!table.get(p)) {
+                    union(parent, allStates.get(i), allStates.get(j));
+                }
+            }
+        }
+
+        Map<DfaState, Set<DfaState>> groups = new HashMap<>();
+        for (DfaState s : allStates) {
+            DfaState root = find(parent, s);
+            groups.computeIfAbsent(root, k -> new HashSet<>()).add(s);
+        }
+
+        return new ArrayList<>(groups.values());
     }
 
     /**
@@ -88,14 +200,18 @@ public class DfaMinimizer {
      * @return Root parent of the state.
      */
     private static DfaState find(Map<DfaState, DfaState> parent, DfaState state) {
-    // TODO: Implement find
     /*
      Pseudocode:
      If parent[state] == state, return state
      Else, recursively find parent and apply path compression
      Return parent[state]
     */
-    throw new UnsupportedOperationException("Not implemented");
+        if (parent.get(state) == state) {
+            return state;
+        }
+        DfaState root = find(parent, parent.get(state));
+        parent.put(state, root); // path compression
+        return root;
     }
 
     /**
@@ -106,13 +222,16 @@ public class DfaMinimizer {
      * @param s2 Second state.
      */
     private static void union(Map<DfaState, DfaState> parent, DfaState s1, DfaState s2) {
-    // TODO: Implement union
     /*
      Pseudocode:
      Find roots of s1 and s2
      If roots are different, set parent of one to the other
     */
-    throw new UnsupportedOperationException("Not implemented");
+        DfaState root1 = find(parent, s1);
+        DfaState root2 = find(parent, s2);
+        if (root1 != root2) {
+            parent.put(root2, root1);
+        }
     }
 
     /**
@@ -129,32 +248,38 @@ public class DfaMinimizer {
          * @param s2 Second state.
          */
         public Pair(DfaState s1, DfaState s2) {
-            // TODO: Implement Pair constructor
             /*
              Pseudocode:
              Assign s1 and s2 so that s1.id <= s2.id
             */
-            throw new UnsupportedOperationException("Not implemented");
+            if (s1.id <= s2.id) {
+                this.s1 = s1;
+                this.s2 = s2;
+            } else {
+                this.s1 = s2;
+                this.s2 = s1;
+            }
         }
 
         @Override
         public boolean equals(Object o) {
-            // TODO: Implement equals
             /*
              Pseudocode:
              Return true if both s1 and s2 ids match
             */
-            throw new UnsupportedOperationException("Not implemented");
+            if (this == o) return true;          
+            if (o == null || getClass() != o.getClass()) return false; 
+            Pair other = (Pair) o;
+            return s1.id == other.s1.id && s2.id == other.s2.id;
         }
 
         @Override
         public int hashCode() {
-            // TODO: Implement hashCode
             /*
              Pseudocode:
              Return hash of s1.id and s2.id
             */
-            throw new UnsupportedOperationException("Not implemented");
+            return Objects.hash(s1.id, s2.id);
         }
     }
 }
