@@ -11,6 +11,9 @@
  */
 package com.compiler.parser.grammar;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -35,6 +38,8 @@ public class Grammar {
      * The start symbol of the grammar.
      */
     private final Symbol startSymbol;
+
+    private Map<Symbol, Set<Symbol>> firstSets;
 
     /**
      * Constructs a Grammar from a string definition.
@@ -206,6 +211,98 @@ public class Grammar {
                 throw new IllegalArgumentException("Production contains undefined symbol.");
             }
         }
+    }
+
+    /**
+     * Computes the FIRST sets for all terminal and non-terminal symbols in the grammar.
+     */
+    public void computeFirstSets() {
+        if (firstSets != null) return; 
+
+        firstSets = new HashMap<>();
+        // El símbolo epsilon, aunque está en el mapa de símbolos, se recrea aquí para consistencia
+        Symbol epsilonSymbol = new Symbol("ε", SymbolType.TERMINAL); 
+
+        // 1. Inicialización: FIRST(a) = {a} para terminales.
+        for (Symbol t : terminals) {
+            firstSets.put(t, new HashSet<>(java.util.Collections.singleton(t)));
+        }
+        
+        // 2. Inicialización: FIRST(A) = {} para no terminales.
+        for (Symbol nt : nonTerminals) {
+            firstSets.put(nt, new HashSet<>());
+        }
+        
+        boolean changed = true;
+        while (changed) {
+            changed = false;
+            
+            for (Production p : productions) {
+                Symbol A = p.left; // A -> X1 X2 ... Xk
+                Set<Symbol> firstA = firstSets.get(A);
+                int originalSize = firstA.size();
+                
+                Set<Symbol> firstRHS = new HashSet<>();
+                boolean allPreviousDeriveEpsilon = true;
+
+                for (Symbol Xi : p.right) {
+                    Set<Symbol> firstXi = firstSets.get(Xi);
+                    
+                    if (firstXi == null) continue; // Si el símbolo no está en el mapa, ignorar (error de gramática)
+
+                    // 2a. Añadir todos los símbolos no-epsilon de FIRST(Xi)
+                    for (Symbol symbol : firstXi) {
+                        if (!symbol.equals(epsilonSymbol)) {
+                            firstRHS.add(symbol);
+                        }
+                    }
+
+                    // 2b. Si Xi no deriva epsilon, detenemos el proceso para la producción actual.
+                    if (!firstXi.contains(epsilonSymbol)) {
+                        allPreviousDeriveEpsilon = false;
+                        break;
+                    }
+                }
+                
+                // 2c. Si toda la parte derecha (RHS) pudo derivar epsilon, añadir epsilon a FIRST(A).
+                if (allPreviousDeriveEpsilon) {
+                    firstRHS.add(epsilonSymbol);
+                }
+                
+                // Unir FIRST(RHS) a FIRST(A) y verificar si hubo cambios.
+                firstA.addAll(firstRHS);
+                
+                if (firstA.size() > originalSize) {
+                    changed = true;
+                }
+            }
+        }
+    }
+
+    /**
+     * Returns the computed FIRST sets for all symbols.
+     * @return Map of FIRST sets.
+     */
+    public Map<Symbol, Set<Symbol>> getFirstSets() {
+        if (firstSets == null) {
+            computeFirstSets();
+        }
+        return firstSets;
+    }
+    
+    /**
+     * Returns the list of productions for a given non-terminal symbol (LHS).
+     * @param nonTerminal The left-hand side symbol.
+     * @return List of productions where the non-terminal is on the left.
+     */
+    public List<Production> getProductionsByLHS(Symbol nonTerminal) {
+        List<Production> result = new ArrayList<>();
+        for (Production p : productions) {
+            if (p.left.equals(nonTerminal)) {
+                result.add(p);
+            }
+        }
+        return result;
     }
 
     /**

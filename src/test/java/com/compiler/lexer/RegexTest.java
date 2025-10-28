@@ -1,4 +1,4 @@
-package com.compiler;
+package com.compiler.lexer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import org.junit.jupiter.params.ParameterizedTest;
