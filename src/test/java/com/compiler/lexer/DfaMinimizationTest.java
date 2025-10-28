@@ -1,4 +1,4 @@
-package com.compiler;
+package com.compiler.lexer;
 
 import java.util.HashSet;
 import java.util.Set;

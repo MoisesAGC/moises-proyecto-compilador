@@ -1,10 +1,9 @@
-package com.compiler;
+package com.compiler.lexer;
 
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.*;
-import com.compiler.lexer.*;
 
 /**
  * Unit tests for the Tokenizer class.
